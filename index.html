@@ -263,6 +263,42 @@
     line-height: 1.5;
     min-height: 14px;
   }
+
+  /* ---------- City autocomplete ---------- */
+  .city-field{ position: relative; }
+  .city-suggest{
+    position: absolute;
+    top: calc(100% + 4px);
+    left: 0;
+    right: 0;
+    z-index: 20;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--r-sm);
+    box-shadow: var(--shadow-md);
+    max-height: 260px;
+    overflow-y: auto;
+  }
+  .city-suggest[hidden]{ display:none; }
+  .city-option{
+    padding: 9px 12px;
+    font-size: 13.5px;
+    color: var(--ink);
+    cursor: pointer;
+    display:flex;
+    justify-content: space-between;
+    gap: 10px;
+  }
+  .city-option .city-region-tag{
+    font-family: var(--font-mono);
+    font-size: 9.5px;
+    color: var(--ink-faint);
+    flex-shrink:0;
+    align-self:center;
+  }
+  .city-option:hover, .city-option.active{ background: var(--accent-soft); }
+  .city-option + .city-option{ border-top: 1px solid var(--border-soft); }
+  .city-suggest-empty{ padding: 10px 12px; font-size: 12.5px; color: var(--ink-faint); }
   select{
     width: 100%;
     background: var(--surface);
@@ -524,20 +560,19 @@
         <option value="first">First</option>
       </select>
     </div>
-    <div class="pref-row">
+    <div class="pref-row city-field">
       <label for="originPref">Flying from <span class="pref-hint">(flexible)</span></label>
-      <input type="text" id="originPref" list="originCities" placeholder="e.g. New York — leave blank if flexible" autocomplete="off">
+      <input type="text" id="originPref" placeholder="e.g. Stuttgart, Germany — leave blank if flexible" autocomplete="off">
+      <div class="city-suggest" id="originSuggest" hidden></div>
       <div class="pref-subtext">Redemption examples below assume a US departure point — origin doesn't narrow results yet, it's just here for context.</div>
     </div>
-    <div class="pref-row">
+    <div class="pref-row city-field">
       <label for="destinationPref">Flying to <span class="pref-hint">(exact city)</span></label>
-      <input type="text" id="destinationPref" list="destCities" placeholder="e.g. Madrid, London, Tokyo" autocomplete="off" oninput="updateDestinationHint()">
+      <input type="text" id="destinationPref" placeholder="e.g. Chiang Mai, Thailand" autocomplete="off">
+      <div class="city-suggest" id="destinationSuggest" hidden></div>
       <div class="pref-subtext" id="destinationHint"></div>
     </div>
   </div>
-
-  <datalist id="originCities"></datalist>
-  <datalist id="destCities"></datalist>
 
   <div class="cta-row">
     <button class="run" onclick="runCalculation()">RUN THE NUMBERS →</button>
@@ -611,54 +646,134 @@
     { id:'alaska',   program:'Atmos Rewards (Alaska / Hawaiian)', desc:'Partner Business · one-way, US ⇄ Asia', cabin:'business', region:'asia',    points:55000,  cash:3200, fundKeys:['alaska'], brandKey:'alaska', group:'air', searchUrl:'https://www.atmosrewards.com/' },
   ];
 
-  // Maps a typed destination city to the broad region buckets the redemption
-  // examples are tagged with (domestic / europe / asia). Not exhaustive —
-  // unrecognized cities fall back to matching everything, same as blank.
-  const CITY_REGION = {
-    'new york':'domestic','nyc':'domestic','los angeles':'domestic','la':'domestic','chicago':'domestic',
-    'miami':'domestic','san francisco':'domestic','seattle':'domestic','boston':'domestic',
-    'washington':'domestic','washington dc':'domestic','denver':'domestic','dallas':'domestic',
-    'houston':'domestic','atlanta':'domestic','honolulu':'domestic','las vegas':'domestic',
-    'orlando':'domestic','austin':'domestic','phoenix':'domestic','san diego':'domestic',
-    'philadelphia':'domestic','new orleans':'domestic','portland':'domestic','minneapolis':'domestic',
-    'detroit':'domestic','nashville':'domestic','charlotte':'domestic','tampa':'domestic','san jose':'domestic',
-    'london':'europe','madrid':'europe','paris':'europe','rome':'europe','barcelona':'europe',
-    'amsterdam':'europe','berlin':'europe','lisbon':'europe','dublin':'europe','vienna':'europe',
-    'athens':'europe','zurich':'europe','milan':'europe','munich':'europe','prague':'europe',
-    'istanbul':'europe','edinburgh':'europe','copenhagen':'europe','stockholm':'europe','oslo':'europe',
-    'brussels':'europe','frankfurt':'europe','venice':'europe','florence':'europe','nice':'europe',
-    'geneva':'europe','budapest':'europe','warsaw':'europe',
-    'tokyo':'asia','osaka':'asia','singapore':'asia','hong kong':'asia','seoul':'asia','bangkok':'asia',
-    'bali':'asia','denpasar':'asia','shanghai':'asia','beijing':'asia','manila':'asia',
-    'kuala lumpur':'asia','taipei':'asia','delhi':'asia','mumbai':'asia','ho chi minh city':'asia',
-    'hanoi':'asia','jakarta':'asia',
-  };
+  // World city search — ~69,700 cities/towns worldwide (GeoNames, CC BY 4.0,
+  // https://www.geonames.org/), loaded async from data/cities.json. Each entry
+  // is a compact tuple: [name, usStateCode, countryCode, region, population].
+  // "region" is one of domestic/europe/asia/null, derived from country + continent,
+  // matching the broad buckets the redemption examples below are tagged with —
+  // it's approximate (e.g. the Middle East buckets under "asia") and anything
+  // outside the Americas/Europe/Asia resolves to null (no current examples there).
+  let CITY_DATA = null;
   const REGION_LABEL = { domestic: 'Domestic US', europe: 'Europe', asia: 'Asia' };
 
-  function resolveRegion(text){
-    const key = (text || '').trim().toLowerCase();
-    if (!key) return null;
-    return CITY_REGION[key] || CITY_REGION[key.split(',')[0].trim()] || null;
+  fetch('data/cities.json').then(r => r.json()).then(d => { CITY_DATA = d; }).catch(() => {
+    // City search degrades gracefully if the dataset fails to load — typed
+    // text still works, it just won't resolve to a region or show suggestions.
+  });
+
+  function formatCity(c){
+    const [name, state, cc, , ] = c;
+    if (cc === 'US' && state){
+      const stateName = CITY_DATA.usStates[state] || state;
+      return `${name}, ${stateName}, USA`;
+    }
+    const country = CITY_DATA.countries[cc] || cc;
+    return `${name}, ${country}`;
   }
 
-  function updateDestinationHint(){
-    const raw = document.getElementById('destinationPref').value;
-    const hint = document.getElementById('destinationHint');
-    if (!raw.trim()){ hint.textContent = ''; return; }
-    const region = resolveRegion(raw);
-    hint.textContent = region
-      ? `≈ matching ${REGION_LABEL[region]} redemptions`
-      : "not in our city list yet — showing all destinations";
+  function searchCities(query, limit){
+    if (!CITY_DATA) return [];
+    const q = query.trim().toLowerCase();
+    if (!q) return [];
+    const starts = [];
+    for (let i = 0; i < CITY_DATA.cities.length && starts.length < limit; i++){
+      const c = CITY_DATA.cities[i];
+      if (c[0].toLowerCase().startsWith(q)) starts.push(c);
+    }
+    if (starts.length >= limit) return starts;
+    const rest = [];
+    for (let i = 0; i < CITY_DATA.cities.length && starts.length + rest.length < limit; i++){
+      const c = CITY_DATA.cities[i];
+      if (starts.indexOf(c) === -1 && c[0].toLowerCase().includes(q)) rest.push(c);
+    }
+    return starts.concat(rest);
   }
 
-  function populateCityLists(){
-    const opts = Object.keys(CITY_REGION).map(c =>
-      `<option value="${c.replace(/\b\w/g, ch => ch.toUpperCase())}">`
-    ).join('');
-    document.getElementById('originCities').innerHTML = opts;
-    document.getElementById('destCities').innerHTML = opts;
+  // Best-effort exact-name match for text typed without picking a suggestion
+  // (e.g. typed then tabbed away) — picks the most populous match.
+  function lookupCityByName(text){
+    if (!CITY_DATA) return null;
+    const q = text.trim().toLowerCase();
+    if (!q) return null;
+    return CITY_DATA.cities.find(c => c[0].toLowerCase() === q) || null;
   }
-  populateCityLists();
+
+  function attachCityAutocomplete(inputId, listId, opts){
+    const input = document.getElementById(inputId);
+    const list = document.getElementById(listId);
+    let active = -1;
+    let matches = [];
+    let resolved = null; // the currently-selected city tuple, or null
+
+    function render(){
+      if (matches.length === 0){
+        list.hidden = true;
+        list.innerHTML = '';
+        return;
+      }
+      list.innerHTML = matches.map((c, i) => `
+        <div class="city-option${i === active ? ' active' : ''}" data-i="${i}">
+          <span>${formatCity(c)}</span>
+          ${c[3] ? `<span class="city-region-tag">${REGION_LABEL[c[3]]}</span>` : ''}
+        </div>
+      `).join('');
+      list.hidden = false;
+    }
+
+    function select(c){
+      resolved = c;
+      input.value = formatCity(c);
+      matches = []; active = -1;
+      render();
+      if (opts && opts.onChange) opts.onChange(resolved);
+    }
+
+    input.addEventListener('input', () => {
+      resolved = null;
+      active = -1;
+      matches = searchCities(input.value, 8);
+      render();
+      if (opts && opts.onChange) opts.onChange(null);
+    });
+
+    input.addEventListener('keydown', (e) => {
+      if (list.hidden) return;
+      if (e.key === 'ArrowDown'){ e.preventDefault(); active = Math.min(active + 1, matches.length - 1); render(); }
+      else if (e.key === 'ArrowUp'){ e.preventDefault(); active = Math.max(active - 1, 0); render(); }
+      else if (e.key === 'Enter'){ if (active >= 0){ e.preventDefault(); select(matches[active]); } }
+      else if (e.key === 'Escape'){ matches = []; active = -1; render(); }
+    });
+
+    list.addEventListener('mousedown', (e) => {
+      const row = e.target.closest('.city-option');
+      if (!row) return;
+      e.preventDefault();
+      select(matches[Number(row.dataset.i)]);
+    });
+
+    input.addEventListener('blur', () => {
+      setTimeout(() => {
+        matches = []; active = -1; render();
+        if (!resolved && input.value.trim()){
+          const guess = lookupCityByName(input.value);
+          if (guess){ resolved = guess; if (opts && opts.onChange) opts.onChange(resolved); }
+        }
+      }, 120);
+    });
+
+    return { getResolved: () => resolved };
+  }
+
+  const destinationCity = attachCityAutocomplete('destinationPref', 'destinationSuggest', {
+    onChange(city){
+      const hint = document.getElementById('destinationHint');
+      if (!city){ hint.textContent = ''; return; }
+      hint.textContent = city[3]
+        ? `≈ matching ${REGION_LABEL[city[3]]} redemptions`
+        : 'outside our current example regions — showing all';
+    }
+  });
+  const originCity = attachCityAutocomplete('originPref', 'originSuggest', {});
 
   const fmtUSD = n => '$' + Math.round(n).toLocaleString('en-US');
   const fmtPts = n => Math.round(n).toLocaleString('en-US');
@@ -724,7 +839,8 @@
     const balances = readBalances();
     const remaining = { ...balances };
     const cabinPref = document.getElementById('cabinPref').value;
-    const regionPref = resolveRegion(document.getElementById('destinationPref').value) || 'anywhere';
+    const resolvedDest = destinationCity.getResolved() || lookupCityByName(document.getElementById('destinationPref').value);
+    const regionPref = (resolvedDest && resolvedDest[3]) || 'anywhere';
 
     const baselineValue = Object.keys(CURRENCIES).reduce(
       (sum, k) => sum + balances[k] * CURRENCIES[k].baseline / 100, 0
