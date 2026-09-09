@@ -588,6 +588,13 @@
   const fmtUSD = n => '$' + Math.round(n).toLocaleString('en-US');
   const fmtPts = n => Math.round(n).toLocaleString('en-US');
 
+  // Live comma-formatting for balance inputs — digits only, reformatted with
+  // thousands separators as you type (200000 -> 200,000).
+  function formatNumberInput(el){
+    const digits = el.value.replace(/[^\d]/g, '');
+    el.value = digits ? Number(digits).toLocaleString('en-US') : '';
+  }
+
   function buildGrid(containerId, keys){
     const el = document.getElementById(containerId);
     el.innerHTML = keys.map(k => {
@@ -599,7 +606,7 @@
           <a class="card-link" href="${CURRENCIES[k].searchUrl}" target="_blank" rel="noopener" title="Open ${CURRENCIES[k].label} on its official site">↗</a>
         </div>
         <div class="currency-input-row">
-          <input type="number" min="0" step="1000" inputmode="numeric" id="in-${k}" placeholder="0">
+          <input type="text" inputmode="numeric" autocomplete="off" id="in-${k}" placeholder="0" oninput="formatNumberInput(this)">
           <span class="unit">pts</span>
         </div>
       </div>
@@ -619,7 +626,8 @@
   function readBalances(){
     const b = {};
     Object.keys(CURRENCIES).forEach(k => {
-      const v = parseFloat(document.getElementById('in-' + k).value);
+      const digits = document.getElementById('in-' + k).value.replace(/[^\d]/g, '');
+      const v = digits ? parseInt(digits, 10) : 0;
       b[k] = (isNaN(v) || v < 0) ? 0 : v;
     });
     return b;
