@@ -158,23 +158,25 @@
     border-top: 1px solid var(--border-soft);
   }
 
-  /* ---------- Logo badges ---------- */
-  .logo-badge{
+  /* ---------- Logo marks (real program logos) ---------- */
+  /* One consistent wide chip for every logo — real logos vary too much in aspect
+     ratio (wordmarks vs. symbols) to force into small circles/squares like the
+     old monogram badges could be. */
+  .logo-mark{
     flex-shrink:0;
     display:flex;
     align-items:center;
     justify-content:center;
-    color:#fff;
-    font-family: var(--font-mono);
-    font-weight: 700;
-    letter-spacing: -0.02em;
-    line-height:1;
+    background:#fff;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    overflow:hidden;
+    width: 54px;
+    height: 32px;
+    padding: 4px 6px;
   }
-  .logo-badge.card{ width:36px; height:24px; border-radius:5px; font-size:8.5px; box-shadow: inset 0 0 0 1px rgba(255,255,255,0.14); }
-  .logo-badge.circle{ width:28px; height:28px; border-radius:50%; font-size:9.5px; }
-  .logo-badge.square{ width:28px; height:28px; border-radius:7px; font-size:9.5px; }
-  .logo-badge.mini{ width:18px; height:18px; border-radius:5px; font-size:6.5px; }
-  .logo-badge.mini.circle{ border-radius:50%; }
+  .logo-mark img{ max-width:100%; max-height:100%; object-fit:contain; display:block; }
+  .logo-mark.mini{ width: 38px; height: 22px; padding: 2px 4px; border-radius: 5px; }
 
   /* ---------- Ledger (currency cards) ---------- */
   .ledger-panel{ margin-bottom: 30px; }
@@ -533,6 +535,8 @@
 
     <p class="disclaimer">
       Per-point baseline valuations are sourced from <a href="https://thepointsguy.com/loyalty-programs/monthly-valuations/" target="_blank" rel="noopener">The Points Guy's monthly valuations</a>, last checked September 2026 — these reflect real published redemption data, not live prices. Transfer-partner eligibility above reflects each program's actual current bank partners. The redemption examples under "Ready to book" and "Almost there" are illustrative sweet spots based on typical pricing, not live availability or guaranteed award space — click "Search award space" on any card to check real inventory on the program's own site before transferring anything. Ratios change often: Chase Sapphire Preferred and Ink Business Preferred cardholders move from a 1:1 to 4:3 Hyatt transfer ratio on Oct&nbsp;1, 2026 (Sapphire Reserve keeps 1:1). Transfers are usually irreversible — confirm current ratios on the issuer's site first.
+      <br><br>
+      Yield is an independent tool and is not affiliated with, endorsed by, or sponsored by Chase, American Express, Citi, Capital One, United, Delta, American Airlines, Atmos Rewards, Southwest, JetBlue, Air Canada, British Airways, World of Hyatt, Marriott, Hilton, IHG, ANA, Virgin Atlantic, Singapore Airlines, Turkish Airlines, or any other company named on this page. All logos and trademarks shown belong to their respective owners and are used solely to identify the loyalty program being described.
     </p>
   </div>
 
@@ -560,36 +564,11 @@
     ihg:       { label: 'IHG One Rewards',          group: 'hotel', baseline: 0.60, searchUrl: 'https://www.ihg.com/hotels/us/en/reservation' },
   };
 
-  // Original monogram marks — brand-flavored color + short code, not reproductions of any program's actual logo artwork.
-  const BRANDS = {
-    chaseUR:   { code: 'UR',  color: '#0B5FCC' },
-    amexMR:    { code: 'MR',  color: '#016FD0' },
-    citiTY:    { code: 'TY',  color: '#083D77' },
-    capOne:    { code: 'C1',  color: '#8E1B2E' },
-    united:    { code: 'UA',  color: '#002244' },
-    delta:     { code: 'DL',  color: '#C8102E' },
-    american:  { code: 'AA',  color: '#0078D2' },
-    alaska:    { code: 'AS',  color: '#00447C' },
-    southwest: { code: 'WN',  color: '#304CB2' },
-    jetblue:   { code: 'B6',  color: '#0033A0' },
-    aeroplan:  { code: 'AC',  color: '#D22630' },
-    avios:     { code: 'AV',  color: '#1D2951' },
-    hyatt:     { code: 'H',   color: '#4E2E82' },
-    marriott:  { code: 'M',   color: '#8B1A2B' },
-    hilton:    { code: 'HH',  color: '#002F61' },
-    ihg:       { code: 'IHG', color: '#7A2048' },
-    ana:       { code: 'NH',  color: '#E60012' },
-    virgin:    { code: 'VS',  color: '#E10A0A' },
-    krisflyer: { code: 'SQ',  color: '#0B4EA2' },
-    turkish:   { code: 'TK',  color: '#C70A20' },
-  };
-  const GROUP_SHAPE = { bank: 'card', air: 'circle', hotel: 'square' };
-
-  function logoBadge(key, shape, size){
-    const b = BRANDS[key];
-    if (!b) return '';
-    const cls = ['logo-badge', shape, size].filter(Boolean).join(' ');
-    return `<span class="${cls}" style="background:${b.color}">${b.code}</span>`;
+  // Real program logos, sourced from each company's own Wikipedia infobox (official current branding).
+  // "avios" uses the British Airways mark to represent the pooled BA/Iberia/Aer Lingus Avios currency.
+  function logoBadge(key, size, alt){
+    const cls = ['logo-mark', size].filter(Boolean).join(' ');
+    return `<span class="${cls}"><img src="logos/${key}.svg" alt="${(alt || key)} logo" loading="lazy"></span>`;
   }
 
   // Redemption examples are illustrative sweet spots, not live pricing — see disclaimer.
@@ -612,11 +591,10 @@
   function buildGrid(containerId, keys){
     const el = document.getElementById(containerId);
     el.innerHTML = keys.map(k => {
-      const shape = GROUP_SHAPE[CURRENCIES[k].group];
       return `
       <div class="currency-card">
         <div class="currency-head">
-          ${logoBadge(k, shape)}
+          ${logoBadge(k, null, CURRENCIES[k].label)}
           <label for="in-${k}" class="currency-name">${CURRENCIES[k].label}</label>
           <a class="card-link" href="${CURRENCIES[k].searchUrl}" target="_blank" rel="noopener" title="Open ${CURRENCIES[k].label} on its official site">↗</a>
         </div>
@@ -770,12 +748,12 @@
         <div class="opp-main">
           ${o.isMatch ? '<div class="pref-flag">MATCHES YOUR TRIP</div>' : ''}
           <div class="opp-title-row">
-            ${logoBadge(o.brandKey, GROUP_SHAPE[o.group])}
+            ${logoBadge(o.brandKey, null, o.program)}
             <div class="opp-title">${o.program}</div>
           </div>
           <div class="opp-meta">${o.desc} · ${fmtPts(o.points)} pts</div>
           <div class="opp-fund">
-            ${o.fundedFrom.map(f => `<span class="fund-chip">${logoBadge(f.key, GROUP_SHAPE[CURRENCIES[f.key].group], 'mini')}${fmtPts(f.amount)}</span>`).join('')}
+            ${o.fundedFrom.map(f => `<span class="fund-chip">${logoBadge(f.key, 'mini', CURRENCIES[f.key].label)}${fmtPts(f.amount)}</span>`).join('')}
           </div>
         </div>
         <div class="opp-stub">
@@ -798,7 +776,7 @@
       const pct = Math.min(100, (o.have / o.points) * 100);
       return `
       <div class="almost-card">
-        ${logoBadge(o.brandKey, GROUP_SHAPE[o.group])}
+        ${logoBadge(o.brandKey, null, o.program)}
         <div class="almost-main">
           <div class="almost-title">${o.program} — ${o.desc}</div>
           <div class="almost-bar-track"><div class="almost-bar-fill" style="width:${pct.toFixed(1)}%"></div></div>
