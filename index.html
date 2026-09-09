@@ -195,7 +195,17 @@
   }
   .currency-card:focus-within{ border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
   .currency-head{ display:flex; align-items:center; gap: 9px; }
-  .currency-name{ font-size: 12.5px; color: var(--ink); font-weight: 500; line-height: 1.25; }
+  .currency-name{ font-size: 12.5px; color: var(--ink); font-weight: 500; line-height: 1.25; flex:1; }
+  .card-link{
+    flex-shrink:0;
+    color: var(--ink-faint);
+    text-decoration:none;
+    font-size: 13px;
+    padding: 2px 4px;
+    border-radius: 4px;
+    transition: color 0.15s ease, background 0.15s ease;
+  }
+  .card-link:hover{ color: var(--accent); background: var(--accent-soft); }
   .currency-input-row{
     display:flex;
     align-items: baseline;
@@ -366,6 +376,21 @@
   }
   .opp-cash{ font-family: var(--font-mono); font-weight: 700; font-size: 19px; color: var(--good); }
   .opp-cpp{ font-family: var(--font-mono); font-size: 11px; color: var(--ink-faint); margin-top:3px; }
+  .search-link{
+    display:inline-block;
+    margin-top: 10px;
+    font-family: var(--font-mono);
+    font-size: 10.5px;
+    color: var(--accent);
+    text-decoration:none;
+    border: 1px solid var(--accent);
+    padding: 5px 10px;
+    border-radius: 20px;
+    white-space:nowrap;
+    transition: background 0.15s ease, color 0.15s ease;
+  }
+  .search-link:hover{ background: var(--accent); color: #fff; }
+  .search-link.small{ margin-top: 6px; font-size: 9.5px; padding: 3px 8px; }
 
   @media (max-width: 560px){
     .opp-card{ flex-wrap: wrap; }
@@ -416,7 +441,7 @@
       </svg>
       Yield
     </div>
-    <div class="status-pill">ESTIMATES · NOT LIVE AVAILABILITY</div>
+    <div class="status-pill">REAL VALUATIONS · NOT LIVE AVAILABILITY</div>
   </div>
 
   <div class="hero">
@@ -434,8 +459,8 @@
         <div class="stat-label">REDEMPTION PLAYS</div>
       </div>
       <div class="stat">
-        <div class="stat-num">2026</div>
-        <div class="stat-label">RATIOS DATED</div>
+        <div class="stat-num">Sep&nbsp;'26</div>
+        <div class="stat-label">VALUATIONS UPDATED</div>
       </div>
     </div>
   </div>
@@ -507,30 +532,32 @@
     <div class="opps" id="almostList"></div>
 
     <p class="disclaimer">
-      Valuations, transfer ratios, and point requirements above are directional estimates based on typical redemption patterns as of 2026 — not live prices or guaranteed award space. Ratios and charts change often (Chase, for instance, is moving the Sapphire Preferred → Hyatt ratio from 1:1 to 4:3 on Oct&nbsp;1, 2026), and transfers are usually irreversible. Confirm current ratios and check real award availability on the loyalty program's own site before transferring anything.
+      Per-point baseline valuations are sourced from <a href="https://thepointsguy.com/loyalty-programs/monthly-valuations/" target="_blank" rel="noopener">The Points Guy's monthly valuations</a>, last checked September 2026 — these reflect real published redemption data, not live prices. Transfer-partner eligibility above reflects each program's actual current bank partners. The redemption examples under "Ready to book" and "Almost there" are illustrative sweet spots based on typical pricing, not live availability or guaranteed award space — click "Search award space" on any card to check real inventory on the program's own site before transferring anything. Ratios change often: Chase Sapphire Preferred and Ink Business Preferred cardholders move from a 1:1 to 4:3 Hyatt transfer ratio on Oct&nbsp;1, 2026 (Sapphire Reserve keeps 1:1). Transfers are usually irreversible — confirm current ratios on the issuer's site first.
     </p>
   </div>
 
 </div>
 
 <script>
+  // Baseline valuations: The Points Guy monthly valuations, September 2026.
+  // https://thepointsguy.com/loyalty-programs/monthly-valuations/
   const CURRENCIES = {
-    chaseUR:   { label: 'Chase Ultimate Rewards',   group: 'bank',  baseline: 1.25 },
-    amexMR:    { label: 'Amex Membership Rewards',  group: 'bank',  baseline: 0.70 },
-    citiTY:    { label: 'Citi ThankYou Points',     group: 'bank',  baseline: 1.00 },
-    capOne:    { label: 'Capital One Miles',        group: 'bank',  baseline: 1.00 },
-    united:    { label: 'United MileagePlus',       group: 'air',   baseline: 1.30 },
-    delta:     { label: 'Delta SkyMiles',           group: 'air',   baseline: 1.10 },
-    american:  { label: 'American AAdvantage',      group: 'air',   baseline: 1.40 },
-    alaska:    { label: 'Alaska Mileage Plan',      group: 'air',   baseline: 1.50 },
-    southwest: { label: 'Southwest Rapid Rewards',  group: 'air',   baseline: 1.30 },
-    jetblue:   { label: 'JetBlue TrueBlue',         group: 'air',   baseline: 1.30 },
-    aeroplan:  { label: 'Air Canada Aeroplan',      group: 'air',   baseline: 1.50 },
-    avios:     { label: 'Avios (BA / Iberia / Aer Lingus)', group: 'air', baseline: 1.30 },
-    hyatt:     { label: 'World of Hyatt',           group: 'hotel', baseline: 1.70 },
-    marriott:  { label: 'Marriott Bonvoy',          group: 'hotel', baseline: 0.70 },
-    hilton:    { label: 'Hilton Honors',            group: 'hotel', baseline: 0.50 },
-    ihg:       { label: 'IHG One Rewards',          group: 'hotel', baseline: 0.50 },
+    chaseUR:   { label: 'Chase Ultimate Rewards',   group: 'bank',  baseline: 2.05, searchUrl: 'https://ultimaterewards.chase.com/' },
+    amexMR:    { label: 'Amex Membership Rewards',  group: 'bank',  baseline: 2.00, searchUrl: 'https://global.americanexpress.com/rewards/membership-rewards' },
+    citiTY:    { label: 'Citi ThankYou Points',     group: 'bank',  baseline: 1.90, searchUrl: 'https://www.thankyou.com/' },
+    capOne:    { label: 'Capital One Miles',        group: 'bank',  baseline: 1.85, searchUrl: 'https://www.capitalone.com/rewards/' },
+    united:    { label: 'United MileagePlus',       group: 'air',   baseline: 1.20, searchUrl: 'https://www.united.com/en/us/fsr/choose-flights' },
+    delta:     { label: 'Delta SkyMiles',           group: 'air',   baseline: 1.20, searchUrl: 'https://www.delta.com/flight-search/book-a-flight' },
+    american:  { label: 'American AAdvantage',      group: 'air',   baseline: 1.45, searchUrl: 'https://www.aa.com/booking/find-flights' },
+    alaska:    { label: 'Atmos Rewards (Alaska / Hawaiian)', group: 'air', baseline: 1.55, searchUrl: 'https://www.atmosrewards.com/' },
+    southwest: { label: 'Southwest Rapid Rewards',  group: 'air',   baseline: 1.25, searchUrl: 'https://www.southwest.com/air/booking/' },
+    jetblue:   { label: 'JetBlue TrueBlue',         group: 'air',   baseline: 1.35, searchUrl: 'https://www.jetblue.com/booking/flights' },
+    aeroplan:  { label: 'Air Canada Aeroplan',      group: 'air',   baseline: 1.50, searchUrl: 'https://www.aircanada.com/aeroplan/redeem/' },
+    avios:     { label: 'Avios (BA / Iberia / Aer Lingus)', group: 'air', baseline: 1.40, searchUrl: 'https://www.britishairways.com/travel/redeem/execclub' },
+    hyatt:     { label: 'World of Hyatt',           group: 'hotel', baseline: 1.65, searchUrl: 'https://www.hyatt.com/' },
+    marriott:  { label: 'Marriott Bonvoy',          group: 'hotel', baseline: 0.75, searchUrl: 'https://www.marriott.com/search/findHotels.mi' },
+    hilton:    { label: 'Hilton Honors',            group: 'hotel', baseline: 0.40, searchUrl: 'https://www.hilton.com/en/search/' },
+    ihg:       { label: 'IHG One Rewards',          group: 'hotel', baseline: 0.60, searchUrl: 'https://www.ihg.com/hotels/us/en/reservation' },
   };
 
   // Original monogram marks — brand-flavored color + short code, not reproductions of any program's actual logo artwork.
@@ -565,16 +592,18 @@
     return `<span class="${cls}" style="background:${b.color}">${b.code}</span>`;
   }
 
+  // Redemption examples are illustrative sweet spots, not live pricing — see disclaimer.
+  // fundKeys reflect each bank currency's actual real transfer-partner list as of Sept 2026.
   const OPPORTUNITIES = [
-    { id:'ana',      program:'ANA Mileage Club',            desc:'Business · US ⇄ Tokyo, round trip',        cabin:'business', region:'asia',     points:85000,  cash:5200, fundKeys:['amexMR'], brandKey:'ana', group:'air' },
-    { id:'aeroplan', program:'Air Canada Aeroplan',         desc:'Business · one-way, US ⇄ Europe',           cabin:'business', region:'europe',   points:60000,  cash:3400, fundKeys:['aeroplan','citiTY','capOne','amexMR','chaseUR'], brandKey:'aeroplan', group:'air' },
-    { id:'virgin',   program:'Virgin Atlantic Flying Club', desc:'Upper Class · round trip, US ⇄ UK',         cabin:'first',    region:'europe',   points:90000,  cash:4800, fundKeys:['citiTY','capOne','amexMR','chaseUR'], brandKey:'virgin', group:'air' },
-    { id:'avios',    program:'Avios short-haul bundle',     desc:'Economy · ~4 short intra-Europe hops',      cabin:'economy',  region:'europe',   points:20000,  cash:900,  fundKeys:['avios','citiTY','capOne','amexMR','chaseUR'], brandKey:'avios', group:'air' },
-    { id:'united',   program:'United MileagePlus',          desc:'Saver Business · US ⇄ Europe / partner',    cabin:'business', region:'europe',   points:70000,  cash:3600, fundKeys:['united','chaseUR'], brandKey:'united', group:'air' },
-    { id:'krisflyer',program:'Singapore KrisFlyer',         desc:'Partner Business · US ⇄ Asia',              cabin:'business', region:'asia',     points:90000,  cash:4600, fundKeys:['citiTY','capOne','amexMR'], brandKey:'krisflyer', group:'air' },
-    { id:'hyatt',    program:'World of Hyatt',               desc:'Hotel · 5 nights, category 6–7 property',  cabin:'hotel',    region:'global',   points:150000, cash:3500, fundKeys:['hyatt','chaseUR'], brandKey:'hyatt', group:'hotel' },
-    { id:'turkish',  program:'Turkish Miles&Smiles',        desc:'Star Alliance Business · one-way, US ⇄ Europe', cabin:'business', region:'europe', points:45000, cash:2600, fundKeys:['citiTY','capOne'], brandKey:'turkish', group:'air' },
-    { id:'alaska',   program:'Alaska Mileage Plan',         desc:'Partner Business · one-way, US ⇄ Asia',     cabin:'business', region:'asia',     points:55000,  cash:3200, fundKeys:['alaska'], brandKey:'alaska', group:'air' },
+    { id:'ana',      program:'ANA Mileage Club',            desc:'Business · US ⇄ Tokyo, round trip',        cabin:'business', region:'asia',     points:85000,  cash:5200, fundKeys:['amexMR'], brandKey:'ana', group:'air', searchUrl:'https://www.ana.co.jp/en/us/international/reserve/award/' },
+    { id:'aeroplan', program:'Air Canada Aeroplan',         desc:'Business · one-way, US ⇄ Europe',           cabin:'business', region:'europe',   points:60000,  cash:3400, fundKeys:['aeroplan','chaseUR','amexMR','capOne'], brandKey:'aeroplan', group:'air', searchUrl:'https://www.aircanada.com/aeroplan/redeem/' },
+    { id:'virgin',   program:'Virgin Atlantic Flying Club', desc:'Upper Class · round trip, US ⇄ UK',         cabin:'first',    region:'europe',   points:90000,  cash:4800, fundKeys:['citiTY','capOne','amexMR','chaseUR'], brandKey:'virgin', group:'air', searchUrl:'https://www.virginatlantic.com/flying-club/redeem-your-miles' },
+    { id:'avios',    program:'Avios short-haul bundle',     desc:'Economy · ~4 short intra-Europe hops',      cabin:'economy',  region:'europe',   points:20000,  cash:900,  fundKeys:['avios','capOne','amexMR','chaseUR'], brandKey:'avios', group:'air', searchUrl:'https://www.britishairways.com/travel/redeem/execclub' },
+    { id:'united',   program:'United MileagePlus',          desc:'Saver Business · US ⇄ Europe / partner',    cabin:'business', region:'europe',   points:70000,  cash:3600, fundKeys:['united','chaseUR'], brandKey:'united', group:'air', searchUrl:'https://www.united.com/en/us/fsr/choose-flights' },
+    { id:'krisflyer',program:'Singapore KrisFlyer',         desc:'Partner Business · US ⇄ Asia',              cabin:'business', region:'asia',     points:90000,  cash:4600, fundKeys:['citiTY','capOne','amexMR','chaseUR'], brandKey:'krisflyer', group:'air', searchUrl:'https://www.singaporeair.com/en_UK/us/ppsclub-krisflyer/miles/redeem-flights/' },
+    { id:'hyatt',    program:'World of Hyatt',               desc:'Hotel · 5 nights, category 6–7 property',  cabin:'hotel',    region:'global',   points:150000, cash:3500, fundKeys:['hyatt','chaseUR'], brandKey:'hyatt', group:'hotel', searchUrl:'https://www.hyatt.com/' },
+    { id:'turkish',  program:'Turkish Miles&Smiles',        desc:'Star Alliance Business · one-way, US ⇄ Europe', cabin:'business', region:'europe', points:45000, cash:2600, fundKeys:['citiTY','capOne'], brandKey:'turkish', group:'air', searchUrl:'https://www.turkishairlines.com/en-int/miles-and-smiles/' },
+    { id:'alaska',   program:'Atmos Rewards (Alaska / Hawaiian)', desc:'Partner Business · one-way, US ⇄ Asia', cabin:'business', region:'asia',    points:55000,  cash:3200, fundKeys:['alaska'], brandKey:'alaska', group:'air', searchUrl:'https://www.atmosrewards.com/' },
   ];
 
   const fmtUSD = n => '$' + Math.round(n).toLocaleString('en-US');
@@ -589,6 +618,7 @@
         <div class="currency-head">
           ${logoBadge(k, shape)}
           <label for="in-${k}" class="currency-name">${CURRENCIES[k].label}</label>
+          <a class="card-link" href="${CURRENCIES[k].searchUrl}" target="_blank" rel="noopener" title="Open ${CURRENCIES[k].label} on its official site">↗</a>
         </div>
         <div class="currency-input-row">
           <input type="number" min="0" step="1000" inputmode="numeric" id="in-${k}" placeholder="0">
@@ -751,6 +781,7 @@
         <div class="opp-stub">
           <div class="opp-cash">${fmtUSD(o.cash)}</div>
           <div class="opp-cpp">${o.cpp.toFixed(1)}¢ / pt</div>
+          <a class="search-link" href="${o.searchUrl}" target="_blank" rel="noopener">Search award space ↗</a>
         </div>
       </div>
     `).join('');
@@ -773,7 +804,10 @@
           <div class="almost-bar-track"><div class="almost-bar-fill" style="width:${pct.toFixed(1)}%"></div></div>
           <div class="almost-need">short by ${fmtPts(o.shortfall)} pts</div>
         </div>
-        <div class="almost-value">${fmtUSD(o.cash)}<br>if unlocked</div>
+        <div class="almost-value">
+          ${fmtUSD(o.cash)}<br>if unlocked
+          <a class="search-link small" href="${o.searchUrl}" target="_blank" rel="noopener">check it ↗</a>
+        </div>
       </div>
     `;
     }).join('');
