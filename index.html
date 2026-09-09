@@ -318,6 +318,61 @@
   select:focus{ border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
 
   /* ---------- CTA ---------- */
+  /* ---------- Live award search ---------- */
+  .live-panel{
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--r-lg);
+    padding: 22px 24px;
+    margin-bottom: 36px;
+  }
+  .live-head{ display:flex; align-items:center; gap: 10px; margin-bottom: 14px; }
+  .live-badge{
+    font-family: var(--font-mono);
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    color: #fff;
+    background: var(--good);
+    padding: 3px 8px;
+    border-radius: 4px;
+  }
+  .live-title{ font-size: 13.5px; color: var(--ink-soft); }
+  .live-search-btn{
+    font-family: var(--font-mono);
+    font-size: 12.5px;
+    letter-spacing: 0.03em;
+    background: var(--ink);
+    color: #fff;
+    border: none;
+    padding: 12px 20px;
+    border-radius: var(--r-sm);
+    cursor: pointer;
+    font-weight: 600;
+  }
+  .live-search-btn:hover:not(:disabled){ background: var(--accent); }
+  .live-search-btn:disabled{ background: var(--surface-tint); color: var(--ink-faint); cursor: not-allowed; border: 1px solid var(--border); }
+  #liveResults{ margin-top: 16px; display:flex; flex-direction: column; gap: 8px; }
+  .live-row{
+    border: 1px solid var(--border-soft);
+    border-radius: var(--r-sm);
+    padding: 12px 14px;
+  }
+  .live-row-main{ display:flex; align-items:center; gap: 12px; margin-bottom: 8px; flex-wrap: wrap; }
+  .live-route{ font-family: var(--font-mono); font-weight: 600; font-size: 13px; color: var(--ink); }
+  .live-date{ font-family: var(--font-mono); font-size: 11.5px; color: var(--ink-soft); }
+  .live-source{ font-family: var(--font-mono); font-size: 10px; color: var(--ink-faint); text-transform: uppercase; margin-left: auto; }
+  .live-cabins{ display:flex; flex-wrap:wrap; gap: 7px; }
+  .cabin-chip{
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--good);
+    background: var(--good-soft);
+    padding: 4px 9px;
+    border-radius: 20px;
+  }
+  .live-none{ font-family: var(--font-mono); font-size: 11px; color: var(--ink-faint); }
+
   .cta-row{ display:flex; align-items:center; gap: 20px; margin-bottom: 50px; flex-wrap: wrap; }
   button.run{
     font-family: var(--font-mono);
@@ -564,7 +619,7 @@
       <label for="originPref">Flying from <span class="pref-hint">(flexible)</span></label>
       <input type="text" id="originPref" placeholder="e.g. Stuttgart, Germany — leave blank if flexible" autocomplete="off">
       <div class="city-suggest" id="originSuggest" hidden></div>
-      <div class="pref-subtext">Redemption examples below assume a US departure point — origin doesn't narrow results yet, it's just here for context.</div>
+      <div class="pref-subtext">Doesn't narrow the illustrative examples below (those all assume a US departure) — but pick one if you want to try live award search underneath.</div>
     </div>
     <div class="pref-row city-field">
       <label for="destinationPref">Flying to <span class="pref-hint">(exact city)</span></label>
@@ -572,6 +627,15 @@
       <div class="city-suggest" id="destinationSuggest" hidden></div>
       <div class="pref-subtext" id="destinationHint"></div>
     </div>
+  </div>
+
+  <div class="live-panel">
+    <div class="live-head">
+      <span class="live-badge">LIVE</span>
+      <span class="live-title">Real award availability, straight from Seats.aero</span>
+    </div>
+    <button class="live-search-btn" id="liveSearchBtn" onclick="runLiveSearch()" disabled>Pick a departure and arrival city above to search</button>
+    <div id="liveResults"></div>
   </div>
 
   <div class="cta-row">
@@ -767,13 +831,117 @@
   const destinationCity = attachCityAutocomplete('destinationPref', 'destinationSuggest', {
     onChange(city){
       const hint = document.getElementById('destinationHint');
-      if (!city){ hint.textContent = ''; return; }
-      hint.textContent = city[3]
-        ? `≈ matching ${REGION_LABEL[city[3]]} redemptions`
-        : 'outside our current example regions — showing all';
+      if (!city){ hint.textContent = ''; } else {
+        hint.textContent = city[3]
+          ? `≈ matching ${REGION_LABEL[city[3]]} redemptions`
+          : 'outside our current example regions — showing all';
+      }
+      updateLiveSearchAvailability();
     }
   });
-  const originCity = attachCityAutocomplete('originPref', 'originSuggest', {});
+  const originCity = attachCityAutocomplete('originPref', 'originSuggest', {
+    onChange(){ updateLiveSearchAvailability(); }
+  });
+
+  // ---------- Live award search (Seats.aero, via /api/search) ----------
+  // Airport dataset: OpenFlights airports.dat (ODbL), city->airport resolved
+  // by nearest-distance rather than name matching, since city/airport naming
+  // rarely lines up cleanly across the two datasets.
+  let AIRPORT_DATA = null;
+  fetch('data/airports.json').then(r => r.json()).then(d => { AIRPORT_DATA = d; }).catch(() => {});
+
+  function haversineKm(lat1, lon1, lat2, lon2){
+    const R = 6371;
+    const dLat = (lat2 - lat1) * Math.PI / 180;
+    const dLon = (lon2 - lon1) * Math.PI / 180;
+    const a = Math.sin(dLat/2) ** 2 + Math.cos(lat1 * Math.PI/180) * Math.cos(lat2 * Math.PI/180) * Math.sin(dLon/2) ** 2;
+    return 2 * R * Math.asin(Math.sqrt(a));
+  }
+
+  function nearestAirports(cityTuple, limit){
+    if (!AIRPORT_DATA || !cityTuple) return [];
+    const lat = cityTuple[5], lon = cityTuple[6];
+    return AIRPORT_DATA
+      .map(a => ({ code: a[0], name: a[3], dist: haversineKm(lat, lon, a[1], a[2]) }))
+      .sort((a, b) => a.dist - b.dist)
+      .slice(0, limit || 4);
+  }
+
+  function updateLiveSearchAvailability(){
+    const btn = document.getElementById('liveSearchBtn');
+    if (!btn) return;
+    const ready = !!(originCity.getResolved() && destinationCity.getResolved());
+    btn.disabled = !ready;
+    btn.textContent = ready ? 'SEARCH LIVE AWARD SPACE →' : 'Pick a departure and arrival city above to search';
+  }
+
+  const CABIN_KEYS = [
+    { code: 'F', label: 'First' },
+    { code: 'J', label: 'Business' },
+    { code: 'W', label: 'Premium Econ' },
+    { code: 'Y', label: 'Economy' },
+  ];
+
+  function renderLiveResults(rows, originCodes, destCodes){
+    const el = document.getElementById('liveResults');
+    if (!rows || rows.length === 0){
+      el.innerHTML = `<p class="empty-note">No award space on file for ${originCodes.join('/')} → ${destCodes.join('/')} right now — try different dates or check back later.</p>`;
+      return;
+    }
+    el.innerHTML = rows.slice(0, 25).map(r => {
+      const cabinChips = CABIN_KEYS.filter(c => r[c.code + 'Available']).map(c => `
+        <span class="cabin-chip">${c.label} · ${fmtPts(Number(r[c.code + 'MileageCost']) || 0)} pts${r[c.code + 'Direct'] ? ' · direct' : ''}</span>
+      `).join('');
+      return `
+        <div class="live-row">
+          <div class="live-row-main">
+            <span class="live-route">${r.Route.OriginAirport} → ${r.Route.DestinationAirport}</span>
+            <span class="live-date">${r.Date}</span>
+            <span class="live-source">${r.Source}</span>
+          </div>
+          <div class="live-cabins">${cabinChips || '<span class="live-none">no cabins open this date</span>'}</div>
+        </div>
+      `;
+    }).join('');
+  }
+
+  async function runLiveSearch(){
+    const btn = document.getElementById('liveSearchBtn');
+    const el = document.getElementById('liveResults');
+    const o = originCity.getResolved();
+    const d = destinationCity.getResolved();
+    if (!o || !d) return;
+
+    const originCodes = nearestAirports(o, 4).map(a => a.code);
+    const destCodes = nearestAirports(d, 4).map(a => a.code);
+    if (originCodes.length === 0 || destCodes.length === 0){
+      el.innerHTML = `<p class="empty-note">Couldn't find an airport near one of those cities.</p>`;
+      return;
+    }
+
+    const cabinParam = { economy: 'economy', premium: 'premium', business: 'business', first: 'first' }[document.getElementById('cabinPref').value] || '';
+    const prevLabel = btn.textContent;
+    btn.disabled = true;
+    btn.textContent = 'SEARCHING…';
+    el.innerHTML = '';
+
+    try {
+      const qs = new URLSearchParams({ origin: originCodes.join(','), destination: destCodes.join(',') });
+      if (cabinParam) qs.set('cabin', cabinParam);
+      const resp = await fetch(`/api/search?${qs.toString()}`);
+      const body = await resp.json();
+      if (!resp.ok){
+        el.innerHTML = `<p class="empty-note">${(body && body.error) || 'Live search is not available right now.'}</p>`;
+        return;
+      }
+      renderLiveResults(body.data, originCodes, destCodes);
+    } catch (err) {
+      el.innerHTML = `<p class="empty-note">Couldn't reach live search: ${err.message}</p>`;
+    } finally {
+      btn.disabled = false;
+      btn.textContent = prevLabel;
+    }
+  }
 
   const fmtUSD = n => '$' + Math.round(n).toLocaleString('en-US');
   const fmtPts = n => Math.round(n).toLocaleString('en-US');
