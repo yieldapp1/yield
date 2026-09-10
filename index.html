@@ -60,6 +60,8 @@
     align-items:center;
     justify-content: space-between;
     margin-bottom: 44px;
+    flex-wrap: wrap;
+    gap: 12px;
   }
   .wordmark{
     display:flex;
@@ -71,6 +73,68 @@
     letter-spacing: -0.02em;
     color: var(--ink);
   }
+  .topbar-right{ display:flex; align-items:center; gap: 14px; flex-wrap: wrap; }
+
+  .account-area{ display:flex; align-items:center; gap: 10px; }
+  .account-btn{
+    font-family: var(--font-mono);
+    font-size: 11.5px;
+    letter-spacing: 0.03em;
+    background: none;
+    color: var(--ink);
+    border: 1px solid var(--border);
+    padding: 7px 13px;
+    border-radius: 20px;
+    cursor: pointer;
+    white-space: nowrap;
+  }
+  .account-btn:hover{ border-color: var(--accent); color: var(--accent); }
+  .account-btn.primary{ background: var(--ink); color: #fff; border-color: var(--ink); }
+  .account-btn.primary:hover{ background: var(--accent); border-color: var(--accent); color: #fff; }
+  .account-email{ font-family: var(--font-mono); font-size: 11.5px; color: var(--ink-soft); }
+
+  .modal-overlay{
+    position: fixed; inset: 0; z-index: 100;
+    background: rgba(18,19,22,0.45);
+    display:flex; align-items:center; justify-content:center;
+    padding: 20px;
+  }
+  .modal-overlay[hidden]{ display:none; }
+  .modal{
+    position: relative;
+    background: var(--surface);
+    border-radius: var(--r-lg);
+    box-shadow: var(--shadow-md);
+    padding: 28px 26px 24px;
+    width: 100%;
+    max-width: 380px;
+  }
+  .modal-close{
+    position:absolute; top:14px; right:14px;
+    background:none; border:none; font-size:20px; line-height:1;
+    color: var(--ink-faint); cursor:pointer; padding:4px;
+  }
+  .modal-close:hover{ color: var(--ink); }
+  .modal-tabs{ display:flex; gap: 6px; margin-bottom: 14px; }
+  .modal-tab{
+    font-family: var(--font-mono); font-size: 12px; letter-spacing:0.03em;
+    background: var(--surface-tint); color: var(--ink-soft);
+    border: 1px solid var(--border); padding: 8px 14px; border-radius: 20px; cursor:pointer;
+  }
+  .modal-tab.active{ background: var(--ink); color: #fff; border-color: var(--ink); }
+  .modal-sub{ font-size: 12.5px; color: var(--ink-soft); line-height:1.5; margin: 0 0 18px; }
+  .modal-label{ display:block; font-size: 12.5px; color: var(--ink-soft); margin-bottom: 14px; }
+  .modal-label input{
+    display:block; width:100%; margin-top:6px;
+    background: var(--bg); border: 1px solid var(--border); border-radius: var(--r-sm);
+    padding: 10px 12px; font-family: var(--font-body); font-size: 14px; color: var(--ink); outline:none;
+  }
+  .modal-label input:focus{ border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+  .modal-submit{ width:100%; text-align:center; margin-top: 4px; }
+  .auth-msg{ font-size: 12px; margin: -4px 0 12px; min-height: 16px; }
+  .auth-msg.error{ color: var(--warn); }
+  .auth-msg.ok{ color: var(--good); }
+
   .status-pill{
     font-family: var(--font-mono);
     font-size: 10.5px;
@@ -556,7 +620,31 @@
       </svg>
       Yield
     </div>
-    <div class="status-pill">REAL VALUATIONS · NOT LIVE AVAILABILITY</div>
+    <div class="topbar-right">
+      <div class="account-area" id="accountArea"></div>
+      <div class="status-pill">REAL VALUATIONS · NOT LIVE AVAILABILITY</div>
+    </div>
+  </div>
+
+  <div class="modal-overlay" id="authModalOverlay" hidden onclick="if(event.target===this) closeAuthModal()">
+    <div class="modal">
+      <button class="modal-close" type="button" onclick="closeAuthModal()" aria-label="Close">×</button>
+      <div class="modal-tabs">
+        <button type="button" class="modal-tab active" id="tabSignIn" onclick="switchAuthTab('signin')">Sign in</button>
+        <button type="button" class="modal-tab" id="tabSignUp" onclick="switchAuthTab('signup')">Create account</button>
+      </div>
+      <p class="modal-sub">Save your point balances and trip preferences to come back to later. Completely optional — the calculator above works fine without an account.</p>
+      <form id="authForm" onsubmit="handleAuthSubmit(event)">
+        <label class="modal-label">Email
+          <input type="email" id="authEmail" required autocomplete="email">
+        </label>
+        <label class="modal-label">Password
+          <input type="password" id="authPassword" required autocomplete="current-password" minlength="6">
+        </label>
+        <div class="auth-msg" id="authMsg"></div>
+        <button type="submit" class="run modal-submit" id="authSubmitBtn">SIGN IN →</button>
+      </form>
+    </div>
   </div>
 
   <div class="hero">
@@ -667,6 +755,7 @@
 
 </div>
 
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.52.1/dist/umd/supabase.js"></script>
 <script>
   // Baseline valuations: The Points Guy monthly valuations, September 2026.
   // https://thepointsguy.com/loyalty-programs/monthly-valuations/
@@ -825,7 +914,7 @@
       }, 120);
     });
 
-    return { getResolved: () => resolved };
+    return { getResolved: () => resolved, setResolved: select };
   }
 
   const destinationCity = attachCityAutocomplete('destinationPref', 'destinationSuggest', {
@@ -1156,6 +1245,159 @@
       </div>
     `;
     }).join('');
+  }
+
+  // ---------- Accounts (Supabase) ----------
+  // Fill these in after creating a free project at supabase.com: Project
+  // Settings -> API -> "Project URL" and the "anon public" key. That key is
+  // designed to be public/client-side -- it's not a secret, access is scoped
+  // by the Row Level Security policies in supabase/schema.sql. Until both are
+  // filled in, accounts are cleanly disabled rather than broken.
+  const SUPABASE_URL = '';
+  const SUPABASE_ANON_KEY = '';
+
+  const sb = (SUPABASE_URL && SUPABASE_ANON_KEY && window.supabase)
+    ? window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY)
+    : null;
+
+  let authMode = 'signin'; // or 'signup'
+  let currentUser = null;
+
+  function renderAccountArea(){
+    const el = document.getElementById('accountArea');
+    if (!sb){
+      el.innerHTML = `<button class="account-btn" disabled title="Accounts aren't configured on this deploy yet">Accounts coming soon</button>`;
+      return;
+    }
+    if (currentUser){
+      el.innerHTML = `
+        <span class="account-email">${currentUser.email}</span>
+        <button class="account-btn primary" onclick="saveProfile(event)">Save my balances</button>
+        <button class="account-btn" onclick="signOutUser()">Sign out</button>
+      `;
+    } else {
+      el.innerHTML = `<button class="account-btn primary" onclick="openAuthModal()">Sign in</button>`;
+    }
+  }
+
+  function openAuthModal(){
+    document.getElementById('authMsg').textContent = '';
+    document.getElementById('authModalOverlay').hidden = false;
+    document.getElementById('authEmail').focus();
+  }
+  function closeAuthModal(){
+    document.getElementById('authModalOverlay').hidden = true;
+  }
+  function switchAuthTab(mode){
+    authMode = mode;
+    document.getElementById('tabSignIn').classList.toggle('active', mode === 'signin');
+    document.getElementById('tabSignUp').classList.toggle('active', mode === 'signup');
+    document.getElementById('authSubmitBtn').textContent = mode === 'signin' ? 'SIGN IN →' : 'CREATE ACCOUNT →';
+    document.getElementById('authMsg').textContent = '';
+  }
+
+  async function handleAuthSubmit(e){
+    e.preventDefault();
+    if (!sb) return;
+    const email = document.getElementById('authEmail').value.trim();
+    const password = document.getElementById('authPassword').value;
+    const msg = document.getElementById('authMsg');
+    const btn = document.getElementById('authSubmitBtn');
+    msg.className = 'auth-msg';
+    msg.textContent = '';
+    btn.disabled = true;
+
+    try {
+      if (authMode === 'signup'){
+        const { data, error } = await sb.auth.signUp({ email, password });
+        if (error) throw error;
+        if (data.session){
+          currentUser = data.user;
+          closeAuthModal();
+          renderAccountArea();
+          await loadProfile();
+        } else {
+          msg.className = 'auth-msg ok';
+          msg.textContent = 'Account created — check your email to confirm, then sign in.';
+        }
+      } else {
+        const { data, error } = await sb.auth.signInWithPassword({ email, password });
+        if (error) throw error;
+        currentUser = data.user;
+        closeAuthModal();
+        renderAccountArea();
+        await loadProfile();
+      }
+    } catch (err) {
+      msg.className = 'auth-msg error';
+      msg.textContent = err.message || 'Something went wrong.';
+    } finally {
+      btn.disabled = false;
+    }
+  }
+
+  async function signOutUser(){
+    if (!sb) return;
+    await sb.auth.signOut();
+    currentUser = null;
+    renderAccountArea();
+  }
+
+  async function loadProfile(){
+    if (!sb || !currentUser) return;
+    const { data, error } = await sb.from('saved_profiles').select('*').eq('user_id', currentUser.id).maybeSingle();
+    if (error || !data) return;
+
+    if (data.balances){
+      Object.keys(data.balances).forEach(k => {
+        const input = document.getElementById('in-' + k);
+        if (input && data.balances[k]){
+          input.value = data.balances[k];
+          formatNumberInput(input);
+        }
+      });
+    }
+    if (data.cabin_pref) document.getElementById('cabinPref').value = data.cabin_pref;
+    if (data.origin_city) originCity.setResolved(data.origin_city);
+    if (data.destination_city) destinationCity.setResolved(data.destination_city);
+    updateLiveSearchAvailability();
+  }
+
+  async function saveProfile(evt){
+    if (!sb || !currentUser) return;
+    const btn = evt && evt.target;
+    const prevLabel = btn ? btn.textContent : '';
+    if (btn){ btn.disabled = true; btn.textContent = 'Saving…'; }
+
+    const row = {
+      user_id: currentUser.id,
+      balances: readBalances(),
+      cabin_pref: document.getElementById('cabinPref').value,
+      origin_city: originCity.getResolved(),
+      destination_city: destinationCity.getResolved(),
+      updated_at: new Date().toISOString(),
+    };
+    const { error } = await sb.from('saved_profiles').upsert(row);
+    if (btn){
+      btn.disabled = false;
+      btn.textContent = error ? 'Save failed — retry' : 'Saved ✓';
+      setTimeout(() => { btn.textContent = prevLabel; }, 2000);
+    }
+  }
+
+  renderAccountArea();
+  if (sb){
+    sb.auth.getSession().then(({ data }) => {
+      if (data.session){
+        currentUser = data.session.user;
+        renderAccountArea();
+        loadProfile();
+      }
+    });
+    sb.auth.onAuthStateChange((_event, session) => {
+      currentUser = session ? session.user : null;
+      renderAccountArea();
+    });
   }
 </script>
 </body>
